@@ -69,10 +69,10 @@ $ cat  <<EOF > on-cluster-rhcos-layer-mc.yaml
 apiVersion: machineconfiguration.openshift.io/v1 
 kind: MachineOSConfig
 metadata:
-  name: worker 
+  name: master 
 spec:
   machineConfigPool:
-    name: worker 
+    name: master 
   containerFile: 
   - containerfileArch: NoArch 
     content: |-
@@ -106,7 +106,7 @@ Once the MachineOSConfig has been created we can monitor it via the following co
 ~~~bash
 $ oc get machineosbuild
 NAME                                      PREPARED   BUILDING   SUCCEEDED   INTERRUPTED   FAILED   AGE
-worker-dc9806c4cbc6e9f76a9d8655f322eeb6   False      True       False       False         False    35s
+master-afc1942c842a324aa66271cbf5fcb0d8   False      True       False       False         False    16s
 ~~~
 
 We can also observe that a build-worker pod was created.
@@ -114,21 +114,21 @@ We can also observe that a build-worker pod was created.
 ~~~bash
 $ oc get pods -n openshift-machine-config-operator
 NAME                                                  READY   STATUS      RESTARTS         AGE
-build-worker-dc9806c4cbc6e9f76a9d8655f322eeb6-g5k6g   0/1     Init:0/1    0                33s
-kube-rbac-proxy-crio-sno2.schmaustech.com             1/1     Running     9                44h
-machine-config-controller-78b85fcd9c-h9gmn            2/2     Running     10               44h
-machine-config-daemon-tlt8g                           2/2     Running     18 (4h58m ago)   44h
-machine-config-nodes-crd-cleanup-29470933-l8jz2       0/1     Completed   0                44h
-machine-config-nodes-crd-cleanup-29470952-xmlvn       0/1     Completed   0                44h
-machine-config-operator-658ff78994-bpzpj              2/2     Running     10               44h
-machine-config-server-mpwff                           1/1     Running     5                44h
-machine-os-builder-65d7b4b97-xmn2n                    1/1     Running     0                44s
+build-master-afc1942c842a324aa66271cbf5fcb0d8-fprgj   0/1     Init:0/1    0                29s
+kube-rbac-proxy-crio-sno2.schmaustech.com             1/1     Running     9                46h
+machine-config-controller-78b85fcd9c-h9gmn            2/2     Running     10               45h
+machine-config-daemon-tlt8g                           2/2     Running     18 (6h37m ago)   45h
+machine-config-nodes-crd-cleanup-29470933-l8jz2       0/1     Completed   0                46h
+machine-config-nodes-crd-cleanup-29470952-xmlvn       0/1     Completed   0                45h
+machine-config-operator-658ff78994-bpzpj              2/2     Running     10               46h
+machine-config-server-mpwff                           1/1     Running     5                45h
+machine-os-builder-65d7b4b97-m97lw                    1/1     Running     0                41s
 ~~~
 
 If we want to see more details on what is happening in the build-worker pod we can tail the logs of the image-build container inside the pod.  I am only showing the command to obtain the logs here because the output is quite long and verbose.  Further the build process takes awhile to run.
 
 ~~~bash
-$ oc logs -f -n openshift-machine-config-operator build-worker-dc9806c4cbc6e9f76a9d8655f322eeb6-g5k6g -c image-build
+$ oc logs -f -n openshift-machine-config-operator build-master-afc1942c842a324aa66271cbf5fcb0d8-fprgj -c image-build
 ~~~
 
 ~~~bash
