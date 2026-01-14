@@ -56,11 +56,15 @@ $ oc create -f on-cluster-rhcos-layer-mc.yaml
 machineosconfig.machineconfiguration.openshift.io/worker created
 ~~~
 
+Once the MachineOSConfig has been created we can monitor it via the following command.
+
 ~~~bash
 $ oc get machineosbuild
 NAME                                      PREPARED   BUILDING   SUCCEEDED   INTERRUPTED   FAILED   AGE
 worker-dc9806c4cbc6e9f76a9d8655f322eeb6   False      True       False       False         False    35s
 ~~~
+
+We can also observe that a build-worker pod was created.
 
 ~~~bash
 $ oc get pods -n openshift-machine-config-operator
@@ -75,6 +79,8 @@ machine-config-operator-658ff78994-bpzpj              2/2     Running     10    
 machine-config-server-mpwff                           1/1     Running     5                44h
 machine-os-builder-65d7b4b97-xmn2n                    1/1     Running     0                44s
 ~~~
+
+If we want to see more details on what is happening in the build-worker pod we can tail the logs of the image-build container inside the pod.  I am only showing the command to obtain the logs here because the output is quite long and verbose.  Further the build process takes awhile to run.
 
 ~~~bash
 $ oc logs -f -n openshift-machine-config-operator build-worker-dc9806c4cbc6e9f76a9d8655f322eeb6-g5k6g -c image-build
