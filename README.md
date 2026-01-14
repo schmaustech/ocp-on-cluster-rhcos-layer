@@ -200,4 +200,4 @@ lnet                  884736  6 osc,obdclass,ptlrpc,ksocklnd,lmv,lustre
 libcfs                262144  11 fld,lnet,osc,fid,obdclass,ptlrpc,ksocklnd,lov,mdc,lmv,lustre
 ~~~~
 
-We can see our image has been updated and contains the necessary packages.   Hopefully this provides an example of how to add 3rd party drivers and packages to an OpenShift environment.
+We can see our image has been updated and contains the necessary packages.   Hopefully this provides an example of how to add 3rd party drivers and packages to an OpenShift environment.  More details can be found on Image Mode [here](https://docs.redhat.com/en/documentation/openshift_container_platform/4.20/html/machine_configuration/mco-coreos-layering).
