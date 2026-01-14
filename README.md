@@ -131,6 +131,73 @@ If we want to see more details on what is happening in the build-worker pod we c
 $ oc logs -f -n openshift-machine-config-operator build-master-afc1942c842a324aa66271cbf5fcb0d8-fprgj -c image-build
 ~~~
 
-~~~bash
+When the build finishes the image will get pushed to the registry defined in the MachineOSConfig.  The logs will have a reference in there like this at the end.
 
+~~~bash
++ buildah push --storage-driver vfs --authfile=/tmp/final-image-push-creds/config.json --digestfile=/tmp/done/digestfile --cert-dir /var/run/secrets/kubernetes.io/serviceaccount image-registry.openshift-image-registry.svc:5000/openshift-machine-config-operator/os-image:master-afc1942c842a324aa66271cbf5fcb0d8
+Getting image source signatures
+Copying blob sha256:3a1265f127cd4df9ca7e05bf29ad06af47b49cff0215defce94c32eceee772bc
+Copying blob sha256:d87a18a2396ee3eb656b6237ac1fa64072dd750dde5aef660aff53e52c156f56
+(...)
+Copying blob sha256:1d82edb13736f9bbad861d8f95cae0abfe5d572225f9d33d326e602ecc5db5fb
+Copying blob sha256:eb199ffe5f75bd36c537582e9cf5fa5638d55b8145f7dcd3cfc6b28699b2568d
+Copying config sha256:3d835eb02f08fe48d26d9b97ebcf0e190c401df2619d45cce1a94b0845d7f4e2
+Writing manifest to image destination
 ~~~
+
+At that point if we look at the machineosbuild output we will see the image moved to succeeded.
+
+~~~bash
+$ oc get machineosbuild
+NAME                                      PREPARED   BUILDING   SUCCEEDED   INTERRUPTED   FAILED   AGE
+master-afc1942c842a324aa66271cbf5fcb0d8   False      False      True        False         False    24m
+~~~
+
+And we will see that the machine config pool is now in an updating state.   At this point the image that was build is getting applied to the system and it will reboot.
+
+~~~bash
+$ oc get mcp
+NAME     CONFIG                                             UPDATED   UPDATING   DEGRADED   MACHINECOUNT   READYMACHINECOUNT   UPDATEDMACHINECOUNT   DEGRADEDMACHINECOUNT   AGE
+master   rendered-master-2d9e26ad2557d1859aadc76634a4f1a5   False     True       False      1              0                   0                     0                      46h
+worker   rendered-worker-36ba71179b413c7b7abc3e477e7367d5   True      False      False      0              0                   0                     0                      46h
+~~~
+
+Once the node or nodes if multicluster reboot we should be able to open a debug pod on them and validate that are kernel modules and client were installed properly.  First let's open a debug prompt.
+
+~~~bash
+$ oc debug node/sno2.schmaustech.com
+Starting pod/sno2schmaustechcom-debug-xcvdh ...
+To use host binaries, run `chroot /host`. Instead, if you need to access host namespaces, run `nsenter -a -t 1`.
+Pod IP: 192.168.0.204
+If you don't see a command prompt, try pressing enter.
+sh-5.1# chroot /host
+sh-5.1# 
+~~~
+
+Next let's confirm the Lustre rpm packages are present.
+
+~~~bash
+sh-5.1# rpm -qa|grep lustre
+kmod-lustre-client-2.15.7-1.el9.x86_64
+lustre-client-dkms-2.15.7-1.el9.noarch
+lustre-client-2.15.7-1.el9.x86_64
+lustre-iokit-2.15.7-1.el9.x86_64
+~~~
+
+The packages are there now let's see if the Lustre kernel module is loaded.  It might not be because my understanding is that it requires a process to request it first.  If its not there we can manually load it.
+
+~~~bash
+sh-5.1# lsmod|grep lustre
+sh-5.1# modprobe lustre
+sh-5.1# lsmod|grep lustre
+lustre               1155072  0
+lmv                   233472  1 lustre
+mdc                   315392  1 lustre
+lov                   385024  2 mdc,lustre
+ptlrpc               1662976  7 fld,osc,fid,lov,mdc,lmv,lustre
+obdclass             3571712  8 fld,osc,fid,ptlrpc,lov,mdc,lmv,lustre
+lnet                  884736  6 osc,obdclass,ptlrpc,ksocklnd,lmv,lustre
+libcfs                262144  11 fld,lnet,osc,fid,obdclass,ptlrpc,ksocklnd,lov,mdc,lmv,lustre
+~~~~
+
+We can see our image has been updated and contains the necessary packages.   Hopefully this provides an example of how to add 3rd party drivers and packages to an OpenShift environment.
