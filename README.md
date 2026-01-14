@@ -12,11 +12,57 @@ While I have written about out-of-cluster image mode before this example will fo
 
 To get started we deployed a Single Node OpenShift environment running 4.20.8.   Note the process will not be any different if using multinode there will just be more nodes to apply the updated image to.
 
-Next we need to create MachineOSConfig custom resource file that will define the additional components we need to add to RHCOS.  The following example shows that we will be doing the following:
+Next we need to generate our secrets that can be used in the builder process.  First let's set some environment variables for our internal registry, the user, the namespace and the token creation.
+
+~~~bash
+$ export REGISTRY=image-registry.openshift-image-registry.svc:5000
+$ export REGISTRY_USER=builder
+$ export REGISTRY_NAMESPACE=openshift-machine-config-operator
+$ export TOKEN=$(oc create token $REGISTRY_USER -n $REGISTRY_NAMESPACE --duration=$((900*24))h)
+~~~
+
+Next let's create the push-secret using the variables we set in the openshift-machine-config-operator namespace.
+
+~~~bash
+$ oc create secret docker-registry push-secret -n openshift-machine-config-operator --docker-server=$REGISTRY --docker-username=$REGISTRY_USER --docker-password=$TOKEN
+secret/push-secret created
+~~~
+
+Now we need to extract the push secret and the clusters global pull-secret.
+
+~~~bash
+$ oc extract secret/push-secret -n openshift-machine-config-operator --to=- > push-secret.json
+# .dockerconfigjson
+
+$ oc extract secret/pull-secret -n openshift-config --to=- > pull-secret.json
+# .dockerconfigjson
+~~~
+
+We will now take the push-secret and global pull secret into one merged secret.
+
+~~~bash
+$ jq -s '.[0] * .[1]' pull-secret.json push-secret.json > pull-and-push-secret.json
+~~~
+
+This new merged secret needs to be create as well in the openshift-machine-config-operator namespace.
+
+~~~bash
+$ oc create secret generic pull-and-push-secret -n openshift-machine-config-operator --from-file=.dockerconfigjson=pull-and-push-secret.json --type=kubernetes.io/dockerconfigjson
+secret/pull-and-push-secret created
+~~~
+
+~~~bash
+$ oc get secrets -n openshift-machine-config-operator |grep push
+pull-and-push-secret                        kubernetes.io/dockerconfigjson        1      10s
+push-secret                                 kubernetes.io/dockerconfigjson        1      114s
+~~~
+
+Now we need to create MachineOSConfig custom resource file that will define the additional components we need to add to RHCOS.  The following example shows that we will be doing the following:
 
 * This MachineOSConfig will be built and applied to nodes in the master MachineOSConfig pool.  If we had workers in the worker pool we could change this and apply it there as well.  We can also apply it to custom pools as well.
 * This MachineOSConfig will install EPEL, libyaml-devel and the four Lustre related client packages.  Dnf will ensure to pull in any additional packages.
-* This MachineOSConfig has a renderedImagePushSpec pushing and pulling from Quay.io.  This could point to whichever registry where you want to store the image and then pull the image from.   A pull-secret for authorization is required.
+* This MachineOSConfig has a renderedImagePushSpec pushing and pulling to internal registry of the OCP cluster.  This could point to whichever registry where you want to store the image and then pull the image from.
+* We also have our secrets that we created before defined in this file.
 
 ~~~bash
 $ cat  <<EOF > on-cluster-rhcos-layer-mc.yaml
@@ -41,12 +87,11 @@ spec:
         ostree container commit
   imageBuilder: 
     imageBuilderType: Job
-  #baseImagePullSecret:
-    #name: global-pull-secret-copy
-  #renderedImagePushSpec: image-registry.openshift-image-registry.svc:5000/openshift/os-image:latest  
-  renderedImagePushSpec: quay.io/redhat_emp1/ecosys-nvidia/os-image:latest
+  baseImagePullSecret: 
+    name: pull-and-push-secret
   renderedImagePushSecret: 
-    name: bschmaus-secret
+    name: push-secret
+  renderedImagePushSpec: image-registry.openshift-image-registry.svc:5000/openshift-machine-config-operator/os-image:latest
 ~~~
 
 Once the MachineOSConfig custom resource file is generated we can create it on our cluster.
